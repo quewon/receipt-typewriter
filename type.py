@@ -1,9 +1,11 @@
-import readchar
 import sys
+import os
+import termios
+import tty
+import select
 import usb.core
 from escpos.printer import Usb
 
-global p
 line_limit = 32 # 58mm printer default
 
 def find_usb_printer():
@@ -27,6 +29,7 @@ except Exception:
 
 line = [{ 'text': "" }]
 style = { 'bold': False, 'underline': False, 'double_width': False }
+fd = sys.stdin.fileno()
 
 print("""┌------------------------------┐
 │ RECEIPT PRINTER TYPEWRITER   │
@@ -39,6 +42,19 @@ print("""┌------------------------------┐
 │ ESCAPE twice to quit.        │
 └------------------------------┘
 """)
+
+def read_key():
+    ch = os.read(fd, 1).decode("utf-8", "replace")
+    if ch != "\x1b":
+        return ch
+    if select.select([fd], [], [], 0.01)[0]:
+        seq = os.read(fd, 1).decode("utf-8", "replace")
+        if seq in ("[", "O"):
+            if select.select([fd], [], [], 0.01)[0]:
+                return "\x1b" + seq + os.read(fd, 1).decode("utf-8", "replace")
+            return "\x1b" + seq
+        return "\x1b" + seq
+    return "\x1b"
 
 def print_line():
     for part in line:
@@ -57,10 +73,23 @@ def print_line():
     sys.stdout.write("\r\n")
     sys.stdout.flush()
 
+old_settings = termios.tcgetattr(fd)
 try:
+    tty.setcbreak(fd)
+    esc_pending = False
+
     while True:
-        ch = readchar.readkey()
-        if ch.isprintable():
+        ch = read_key()
+        if ch == "\x1b": # escape
+            if esc_pending:
+                break  # ESC twice -> quit
+            esc_pending = True
+            continue
+        esc_pending = False
+
+        if ch.startswith("\x1b["): # arrow keys and other csi sequences
+            pass
+        elif ch.isprintable():
             line[-1]['text'] += ch
             sys.stdout.write(ch)
             if 'double_width' in line[-1]:
@@ -70,13 +99,11 @@ try:
             for part in line:
                 part_len = len(part['text'])
                 total_len += part_len * 2 if 'double_width' in part else part_len
-            if total_len >= line_limit == 0:
+            if total_len >= line_limit:
                 print_line()
-        elif ch == "\x1b\x1b": #escape
-            break
-        elif ch == readchar.key.ENTER:
+        elif ch in ("\r", "\n"):
             print_line()
-        elif ch == readchar.key.BACKSPACE:
+        elif ch == "\x7f": # backspace
             if line[-1]['text'] == "":
                 if len(line) > 1:
                     line = line[:-1]
@@ -97,8 +124,6 @@ try:
             else:
                 sys.stdout.write("\b \b")
             sys.stdout.flush()
-        elif ch == readchar.key.UP or ch == readchar.key.DOWN or ch == readchar.key.LEFT or ch == readchar.key.RIGHT:
-            pass # ignore arrow keys
         elif ch == '\x02': #ctrl+b
             style['bold'] = not style['bold']
             sys.stdout.write('\033[1m' if style['bold'] else '\033[22m')
@@ -130,5 +155,6 @@ try:
 except KeyboardInterrupt:
     pass
 
+termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 sys.stdout.write("\r\n")
 sys.stdout.flush()
