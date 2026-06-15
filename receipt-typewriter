@@ -12,7 +12,7 @@ fi
 # clear window
 printf '\033[2J\033[3J\033[H'
 # resize window
-printf '\033[8;24;33t'
+printf '\033[8;24;32t'
 # set window title
 printf '\033]0;R-TYPE\007'
 python3 "$dir"/type.py

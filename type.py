@@ -28,7 +28,7 @@ except Exception:
 line = [{ 'text': "" }]
 style = { 'bold': False, 'underline': False, 'double_width': False }
 
-print("""┌──────────────────────────────┐
+print("""┌------------------------------┐
 │ RECEIPT PRINTER TYPEWRITER   │
 │                              │
 │ ENTER to print/linefeed.     │
@@ -37,7 +37,7 @@ print("""┌──────────────────────�
 │ Ctrl+W to toggle w i d t h . │
 │                              │
 │ ESCAPE twice to quit.        │
-└──────────────────────────────┘
+└------------------------------┘
 """)
 
 def print_line():
@@ -70,7 +70,7 @@ try:
             for part in line:
                 part_len = len(part['text'])
                 total_len += part_len * 2 if 'double_width' in part else part_len
-            if total_len % line_limit == 0:
+            if total_len >= line_limit == 0:
                 print_line()
         elif ch == "\x1b\x1b": #escape
             break
