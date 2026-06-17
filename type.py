@@ -28,7 +28,7 @@ except Exception:
     sys.exit("printer not found.")
 
 line = [{ 'text': "" }]
-style = { 'bold': False, 'underline': False, 'double_width': False }
+style = { 'bold': False, 'double_width': False }
 fd = sys.stdin.fileno()
 
 print("""┌------------------------------┐
@@ -36,7 +36,6 @@ print("""┌------------------------------┐
 │                              │
 │ ENTER to print/linefeed.     │
 │ Ctrl+B to toggle \033[1mbold\033[0m.       │
-│ Ctrl+U to toggle \033[4munderline\033[0m.  │
 │ Ctrl+W to toggle w i d t h . │
 │                              │
 │ ESCAPE twice to quit.        │
@@ -59,19 +58,26 @@ def read_key():
 def print_line():
     for part in line:
         p._raw(b'\x1b\x40')
-        p.set(bold='bold' in part, underline='underline' in part, double_width='double_width' in part)
+        p.set(bold='bold' in part, double_width='double_width' in part)
         p.text(part['text'])
     p.text("\n")
     line.clear()
     line.append({ 'text': "" })
     if style['bold']:
         line[-1]['bold'] = True
-    if style['underline']:
-        line[-1]['underline'] = True
+    #if style['underline']:
+    #    line[-1]['underline'] = True
     if style['double_width']:
         line[-1]['double_width'] = True
     sys.stdout.write("\r\n")
     sys.stdout.flush()
+
+def total_len(line):
+    l = 0
+    for part in line:
+        part_len = len(part['text'])
+        l += part_len * 2 if 'double_width' in part else part_len
+    return l
 
 old_settings = termios.tcgetattr(fd)
 try:
@@ -90,16 +96,14 @@ try:
         if ch.startswith("\x1b["): # arrow keys and other csi sequences
             pass
         elif ch.isprintable():
+            if 'double_width' in line[-1] and total_len(line) >= line_limit - 1:
+                print_line()
             line[-1]['text'] += ch
             sys.stdout.write(ch)
             if 'double_width' in line[-1]:
                 sys.stdout.write(" ")
             sys.stdout.flush()
-            total_len = 0
-            for part in line:
-                part_len = len(part['text'])
-                total_len += part_len * 2 if 'double_width' in part else part_len
-            if total_len >= line_limit:
+            if total_len(line) >= line_limit:
                 print_line()
         elif ch in ("\r", "\n"):
             print_line()
@@ -109,13 +113,19 @@ try:
                     line = line[:-1]
                     line[-1]['text'] = line[-1]['text'][:-1]
                     style['bold'] = 'bold' in line[-1]
-                    style['underline'] = 'underline' in line[-1]
+                    #style['underline'] = 'underline' in line[-1]
                     style['double_width'] = 'double_width' in line[-1]
                     sys.stdout.write('\033[0m') # reset everything
                     sys.stdout.write('\033[1m' if style['bold'] else '')
                     sys.stdout.write('\033[4m' if style['underline'] else '')
                     sys.stdout.flush()
                 else:
+                    line[0] = { 'text': "" }
+                    style['bold'] = False
+                    #style['underline'] = False
+                    style['double_width'] = False
+                    sys.stdout.write('\033[0m') # reset everything
+                    sys.stdout.flush()
                     continue
             else:
                 line[-1]['text'] = line[-1]['text'][:-1]
@@ -134,16 +144,16 @@ try:
                 line[-1]['bold'] = True
             elif 'bold' in line[-1]:
                 del line[-1]['bold']
-        elif ch == '\x15': #ctrl+u
-            style['underline'] = not style['underline']
-            sys.stdout.write('\033[4m' if style['underline'] else '\033[24m')
-            sys.stdout.flush()
-            if len(line[-1]['text']) > 0 and ('underline' in line[-1]) != style['underline']:
-                line.append({ 'text': "" })
-            if style['underline']:
-                line[-1]['underline'] = True
-            elif 'underline' in line[-1]:
-                del line[-1]['underline']
+        #elif ch == '\x15': #ctrl+u
+        #    style['underline'] = not style['underline']
+        #    sys.stdout.write('\033[4m' if style['underline'] else '\033[24m')
+        #    sys.stdout.flush()
+        #    if len(line[-1]['text']) > 0 and ('underline' in line[-1]) != style['underline']:
+        #        line.append({ 'text': "" })
+        #    if style['underline']:
+        #        line[-1]['underline'] = True
+        #    elif 'underline' in line[-1]:
+        #        del line[-1]['underline']
         elif ch == '\x17': #ctrl+w
             style['double_width'] = not style['double_width']
             if len(line[-1]['text']) > 0 and ('double_width' in line[-1]) != style['double_width']:
